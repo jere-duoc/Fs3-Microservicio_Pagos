@@ -12,7 +12,6 @@ import DuocQuin.Pagos.service.PagosService;
 
 @RestController
 @RequestMapping("/api/sueldos")
-@CrossOrigin(origins = "*")
 public class PagosController {
 
     @Autowired

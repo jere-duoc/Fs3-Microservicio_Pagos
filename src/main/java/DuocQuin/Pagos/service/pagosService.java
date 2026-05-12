@@ -18,8 +18,9 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 @Service
 @Transactional
 public class PagosService {
-    private static final Logger logger =LoggerFactory.getLogger(PagosService.class);
-    private static final String CIRCUIT_BREAKER_NAME ="PagosService" ;
+    private static final Logger logger = LoggerFactory.getLogger(PagosService.class);
+    private static final String CIRCUIT_BREAKER_NAME = "PagosService";
+    private static final double VALOR_HORA = 5000;
 
     @Autowired
     private PagosRepository pagosRepository;
@@ -49,7 +50,7 @@ public class PagosService {
     }
 
     //fallback
-    public Optional<PagosModel> findByIdFallback(Long id,Exception e){
+    public Optional<PagosModel> findByIdFallback(Long id, Exception e){
         logger.error("Circuit Breaker activado en findById: {}", e.getMessage());
         return Optional.empty();
     }
@@ -58,7 +59,7 @@ public class PagosService {
     //generar sueldo
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "saveFallback")
     public PagosModel save(PagosModel pago){
-        logger.info("guardando nuevo sueldo");
+        logger.info("Guardando nuevo sueldo para usuario: {}", pago.getIdUsuario());
 
         if (pago.getSueldoBase() == null) {
             throw new IllegalArgumentException("El sueldo base es obligatorio");
@@ -68,34 +69,19 @@ public class PagosService {
             pago.setBonos(0.0);
         }
 
-        List<HorarioDTO> horarios = horarioClient.obtenerHorario(pago.getIdUsuario());
+        double totalHoras = calcularHorasDelMes(pago.getIdUsuario(), pago.getFechaPago());
+        double sueldoTotal = pago.getSueldoBase() + pago.getBonos() + (totalHoras * VALOR_HORA);
 
-        double totalHoras = 0;
-
-        for (HorarioDTO h : horarios) {
-
-            if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
-
-                double horas = java.time.Duration.between(
-                    h.getHoraEntrada(),
-                    h.getHoraSalida()).toHours();
-
-                if (horas < 0) {
-                    horas = horas + 24;
-                }
-                totalHoras += horas;
-            }
-        }
-
-        double valorHora = 5000;
-        double sueldoTotal = (totalHoras * valorHora) + pago.getSueldoBase() + pago.getBonos();
+        logger.info("Cálculo: base={} + bonos={} + ({}h x ${}={}) = TOTAL: {}",
+            pago.getSueldoBase(), pago.getBonos(), totalHoras, VALOR_HORA, 
+            totalHoras * VALOR_HORA, sueldoTotal);
 
         pago.setSueldoTotal(sueldoTotal);
         return pagosRepository.save(pago);
     }
 
     //fallback
-    public PagosModel saveFallback(PagosModel sueldo,  Exception e){
+    public PagosModel saveFallback(PagosModel sueldo, Exception e){
         logger.error("Circuit Breaker activado en save: {}", e.getMessage());
         throw new RuntimeException("Servicio de sueldos no disponible", e);
     }
@@ -103,50 +89,30 @@ public class PagosService {
 
     //actualizar pago
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "updateFallback")
-    public PagosModel update(
-        Long id,
-        PagosModel sueldoDetails){
+    public PagosModel update(Long id, PagosModel sueldoDetails){
         logger.info("Actualizando sueldo con ID: {}", id);
 
-        PagosModel sueldo = pagosRepository.findById(id).orElseThrow(() -> new RuntimeException("Sueldo no encontrado"));
+        PagosModel sueldo = pagosRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Sueldo no encontrado"));
 
         sueldo.setSueldoBase(sueldoDetails.getSueldoBase());
         sueldo.setBonos(sueldoDetails.getBonos());
         sueldo.setFechaPago(sueldoDetails.getFechaPago());
         sueldo.setIdUsuario(sueldoDetails.getIdUsuario());
 
-        List<HorarioDTO> horarios = horarioClient.obtenerHorario(sueldo.getIdUsuario());
+        double totalHoras = calcularHorasDelMes(sueldo.getIdUsuario(), sueldo.getFechaPago());
+        double sueldoTotal = sueldo.getSueldoBase() + sueldo.getBonos() + (totalHoras * VALOR_HORA);
 
-        double totalHoras = 0;
-
-        for (HorarioDTO h : horarios) {
-
-            if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
-
-                double horas = java.time.Duration.between(
-                    h.getHoraEntrada(),
-                    h.getHoraSalida()).toHours();
-
-                if (horas < 0) {
-                    horas = horas + 24;
-                }
-
-                totalHoras += horas;
-            }
-        }
-
-        double valorHora = 5000;
-        double sueldoTotal = (totalHoras * valorHora) + sueldo.getSueldoBase() + sueldo.getBonos();
+        logger.info("Actualización - Cálculo: base={} + bonos={} + ({}h x ${}={}) = TOTAL: {}",
+            sueldo.getSueldoBase(), sueldo.getBonos(), totalHoras, VALOR_HORA, 
+            totalHoras * VALOR_HORA, sueldoTotal);
 
         sueldo.setSueldoTotal(sueldoTotal);
         return pagosRepository.save(sueldo);
     }
 
     //fallback
-    public PagosModel updateFallback(
-            Long id,
-            PagosModel pagosDetails,
-            Exception e){
+    public PagosModel updateFallback(Long id, PagosModel pagosDetails, Exception e){
         logger.error("Circuit Breaker activado en update: {}", e.getMessage());
         throw new RuntimeException("Servicio de sueldos no disponible", e);
     }
@@ -158,17 +124,58 @@ public class PagosService {
         logger.info("Eliminando sueldo con ID: {}", id);
 
         if (!pagosRepository.existsById(id)) {
-            throw new RuntimeException("Sueldo no encontrado");}
+            throw new RuntimeException("Sueldo no encontrado");
+        }
 
         pagosRepository.deleteById(id);
     }
 
 
     //fallback
-    public void deleteByIdFallback(
-            Long id,
-            Exception e){
+    public void deleteByIdFallback(Long id, Exception e){
         logger.error("Circuit Breaker activado en deleteById: {}", e.getMessage());
         throw new RuntimeException("Servicio de sueldos no disponible", e);
+    }
+
+
+    /**
+     * Calcula las horas trabajadas en el mes correspondiente a la fecha de pago.
+     * Usa el endpoint /usuario/{id}/mes del microservicio de Horarios para obtener
+     * solo los turnos del mes relevante, evitando sumar horas de meses anteriores.
+     * 
+     * Usa toMinutes()/60.0 para mayor precisión (evita truncar 7h59m a 7h).
+     */
+    private double calcularHorasDelMes(Long idUsuario, java.time.LocalDate fechaPago) {
+        if (idUsuario == null || fechaPago == null) {
+            logger.warn("No se puede calcular horas: idUsuario={}, fechaPago={}", idUsuario, fechaPago);
+            return 0;
+        }
+
+        int anio = fechaPago.getYear();
+        int mes = fechaPago.getMonthValue();
+
+        List<HorarioDTO> horarios = horarioClient.obtenerHorarioPorMes(idUsuario, anio, mes);
+        
+        double totalHoras = 0;
+
+        for (HorarioDTO h : horarios) {
+            if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
+                // Usar minutos para mayor precisión
+                double minutos = java.time.Duration.between(
+                    h.getHoraEntrada(),
+                    h.getHoraSalida()).toMinutes();
+
+                // Si es negativo (turno nocturno que cruza medianoche)
+                if (minutos < 0) {
+                    minutos = minutos + (24 * 60);
+                }
+
+                totalHoras += minutos / 60.0;
+            }
+        }
+
+        logger.info("Total horas calculadas para usuario {} en {}/{}: {} horas", 
+            idUsuario, mes, anio, totalHoras);
+        return totalHoras;
     }
 }

@@ -1,5 +1,6 @@
 package DuocQuin.Pagos.dto;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 
 import lombok.Getter;
@@ -14,5 +15,6 @@ public class HorarioDTO {
     private Long idUsuario;
     private LocalTime horaEntrada;
     private LocalTime horaSalida;
+    private LocalDate fecha;
     private Integer horasExtra;
 }
