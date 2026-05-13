@@ -14,7 +14,6 @@ import DuocQuin.Pagos.repository.PagosRepository;
 import DuocQuin.Pagos.dto.HorarioDTO;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
-
 @Service
 @Transactional
 public class PagosService {
@@ -28,37 +27,35 @@ public class PagosService {
     @Autowired
     private HorarioClient horarioClient;
 
-
-    //Listar los sueldos
+    // Listar los sueldos
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "findAllFallback")
-    public List<PagosModel> findAll(){
+    public List<PagosModel> findAll() {
         logger.info("Obteniendo todos los sueldos");
         return pagosRepository.findAll();
     }
 
-    //fallback
-    public List<PagosModel> findAllFallback(Exception e){
-        logger.error("Circuit Breaker activado en findAll: {}",e.getMessage());
+    // fallback
+    public List<PagosModel> findAllFallback(Exception e) {
+        logger.error("Circuit Breaker activado en findAll: {}", e.getMessage());
         return List.of();
     }
 
-    //Buscar pago por id
+    // Buscar pago por id
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "findByIdFallback")
     public Optional<PagosModel> findById(Long id) {
         logger.info("Buscando sueldo con ID: {}", id);
         return pagosRepository.findById(id);
     }
 
-    //fallback
-    public Optional<PagosModel> findByIdFallback(Long id, Exception e){
+    // fallback
+    public Optional<PagosModel> findByIdFallback(Long id, Exception e) {
         logger.error("Circuit Breaker activado en findById: {}", e.getMessage());
         return Optional.empty();
     }
 
-
-    //generar sueldo
+    // generar sueldo
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "saveFallback")
-    public PagosModel save(PagosModel pago){
+    public PagosModel save(PagosModel pago) {
         logger.info("Guardando nuevo sueldo para usuario: {}", pago.getIdUsuario());
 
         if (pago.getSueldoBase() == null) {
@@ -73,27 +70,26 @@ public class PagosService {
         double sueldoTotal = pago.getSueldoBase() + pago.getBonos() + (totalHoras * VALOR_HORA);
 
         logger.info("Cálculo: base={} + bonos={} + ({}h x ${}={}) = TOTAL: {}",
-            pago.getSueldoBase(), pago.getBonos(), totalHoras, VALOR_HORA, 
-            totalHoras * VALOR_HORA, sueldoTotal);
+                pago.getSueldoBase(), pago.getBonos(), totalHoras, VALOR_HORA,
+                totalHoras * VALOR_HORA, sueldoTotal);
 
         pago.setSueldoTotal(sueldoTotal);
         return pagosRepository.save(pago);
     }
 
-    //fallback
-    public PagosModel saveFallback(PagosModel sueldo, Exception e){
+    // fallback
+    public PagosModel saveFallback(PagosModel sueldo, Exception e) {
         logger.error("Circuit Breaker activado en save: {}", e.getMessage());
         throw new RuntimeException("Servicio de sueldos no disponible", e);
     }
 
-
-    //actualizar pago
+    // actualizar pago
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "updateFallback")
-    public PagosModel update(Long id, PagosModel sueldoDetails){
+    public PagosModel update(Long id, PagosModel sueldoDetails) {
         logger.info("Actualizando sueldo con ID: {}", id);
 
         PagosModel sueldo = pagosRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Sueldo no encontrado"));
+                .orElseThrow(() -> new RuntimeException("Sueldo no encontrado"));
 
         sueldo.setSueldoBase(sueldoDetails.getSueldoBase());
         sueldo.setBonos(sueldoDetails.getBonos());
@@ -104,23 +100,22 @@ public class PagosService {
         double sueldoTotal = sueldo.getSueldoBase() + sueldo.getBonos() + (totalHoras * VALOR_HORA);
 
         logger.info("Actualización - Cálculo: base={} + bonos={} + ({}h x ${}={}) = TOTAL: {}",
-            sueldo.getSueldoBase(), sueldo.getBonos(), totalHoras, VALOR_HORA, 
-            totalHoras * VALOR_HORA, sueldoTotal);
+                sueldo.getSueldoBase(), sueldo.getBonos(), totalHoras, VALOR_HORA,
+                totalHoras * VALOR_HORA, sueldoTotal);
 
         sueldo.setSueldoTotal(sueldoTotal);
         return pagosRepository.save(sueldo);
     }
 
-    //fallback
-    public PagosModel updateFallback(Long id, PagosModel pagosDetails, Exception e){
+    // fallback
+    public PagosModel updateFallback(Long id, PagosModel pagosDetails, Exception e) {
         logger.error("Circuit Breaker activado en update: {}", e.getMessage());
         throw new RuntimeException("Servicio de sueldos no disponible", e);
     }
 
-
-    //eliminar sueldo
+    // eliminar sueldo
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "deleteByIdFallback")
-    public void deleteById(Long id){
+    public void deleteById(Long id) {
         logger.info("Eliminando sueldo con ID: {}", id);
 
         if (!pagosRepository.existsById(id)) {
@@ -130,13 +125,11 @@ public class PagosService {
         pagosRepository.deleteById(id);
     }
 
-
-    //fallback
-    public void deleteByIdFallback(Long id, Exception e){
+    // fallback
+    public void deleteByIdFallback(Long id, Exception e) {
         logger.error("Circuit Breaker activado en deleteById: {}", e.getMessage());
         throw new RuntimeException("Servicio de sueldos no disponible", e);
     }
-
 
     /**
      * Calcula las horas trabajadas en el mes correspondiente a la fecha de pago.
@@ -155,15 +148,15 @@ public class PagosService {
         int mes = fechaPago.getMonthValue();
 
         List<HorarioDTO> horarios = horarioClient.obtenerHorarioPorMes(idUsuario, anio, mes);
-        
+
         double totalHoras = 0;
 
         for (HorarioDTO h : horarios) {
             if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
                 // Usar minutos para mayor precisión
                 double minutos = java.time.Duration.between(
-                    h.getHoraEntrada(),
-                    h.getHoraSalida()).toMinutes();
+                        h.getHoraEntrada(),
+                        h.getHoraSalida()).toMinutes();
 
                 // Si es negativo (turno nocturno que cruza medianoche)
                 if (minutos < 0) {
@@ -174,8 +167,8 @@ public class PagosService {
             }
         }
 
-        logger.info("Total horas calculadas para usuario {} en {}/{}: {} horas", 
-            idUsuario, mes, anio, totalHoras);
+        logger.info("Total horas calculadas para usuario {} en {}/{}: {} horas",
+                idUsuario, mes, anio, totalHoras);
         return totalHoras;
     }
 }
