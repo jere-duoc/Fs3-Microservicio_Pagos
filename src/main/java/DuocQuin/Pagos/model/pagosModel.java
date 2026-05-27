@@ -2,7 +2,9 @@ package DuocQuin.Pagos.model;
 
 import java.time.LocalDate;
 
+import DuocQuin.Pagos.utils.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -26,12 +28,15 @@ public class PagosModel {
     @Column(name = "id_sueldo")
     private Long idSueldo;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "sueldo_base")
     private Double sueldoBase;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "bonos")
     private Double bonos;
-
+    
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "sueldo_total")
     private Double sueldoTotal;
 
