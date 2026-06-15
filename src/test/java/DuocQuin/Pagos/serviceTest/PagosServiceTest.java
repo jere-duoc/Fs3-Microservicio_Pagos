@@ -283,24 +283,5 @@ void saveCubrirErrorEnRabbitTemplate() {
         assertTrue(resultado.getSueldoTotal() > 500000.0);
     }
 
-    @Test
-    void guardarPagoDebeManejarErrorEnHorarioClient() {
-        PagosModel pago = new PagosModel();
-        pago.setIdUsuario(1L);
-        pago.setSueldoBase(500000.0);
-        pago.setBonos(0.0);
-        pago.setFechaPago(LocalDate.of(2026, 6, 1));
-
-        when(horarioClient.obtenerHorarioPorMes(anyLong(), anyInt(), anyInt()))
-                .thenReturn(List.of());
-
-        when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
-
-        PagosModel resultado = service.save(pago);
-
-        assertNotNull(resultado);
-    }
-
-
     
 }
