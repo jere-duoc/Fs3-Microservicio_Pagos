@@ -5,12 +5,14 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import DuocQuin.Pagos.model.PagosModel;
 import DuocQuin.Pagos.repository.PagosRepository;
+import DuocQuin.Pagos.dto.EventoPagosDTO;
 import DuocQuin.Pagos.dto.HorarioDTO;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
@@ -26,6 +28,9 @@ public class PagosService {
 
     @Autowired
     private HorarioClient horarioClient;
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
 
     // Listar los sueldos
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "findAllFallback")
@@ -53,6 +58,7 @@ public class PagosService {
         return Optional.empty();
     }
 
+
     // generar sueldo
     @CircuitBreaker(name = CIRCUIT_BREAKER_NAME, fallbackMethod = "saveFallback")
     public PagosModel save(PagosModel pago) {
@@ -73,14 +79,49 @@ public class PagosService {
                 pago.getSueldoBase(), pago.getBonos(), totalHoras, VALOR_HORA,
                 totalHoras * VALOR_HORA, sueldoTotal);
 
+            
         pago.setSueldoTotal(sueldoTotal);
-        return pagosRepository.save(pago);
+
+        PagosModel saved = pagosRepository.save(pago);
+
+        notificarPago(saved);
+
+        return saved;
     }
+
 
     // fallback
     public PagosModel saveFallback(PagosModel sueldo, Exception e) {
         logger.error("Circuit Breaker activado en save: {}", e.getMessage());
         throw new RuntimeException("Servicio de sueldos no disponible", e);
+    }
+
+
+        //notificar pago
+
+    private void notificarPago(PagosModel pago){
+        try{
+            
+            EventoPagosDTO evento = new EventoPagosDTO();
+
+            evento.setIdSueldo(pago.getIdSueldo());
+            evento.setIdUsuario(pago.getIdUsuario());
+            evento.setMensaje("Su pago ha sido generado");
+            evento.setTipoEnvio("PLATAFORMA");
+
+            rabbitTemplate.convertAndSend(
+                "duocquin.exchange",
+                "pago.generado",
+                evento
+            );
+
+            logger.info("Evento de pago enviado: {}", pago.getIdSueldo());
+
+
+        } catch(Exception e){
+
+            logger.error("Error enviando evento de pago: {}", e.getMessage());
+        }
     }
 
     // actualizar pago

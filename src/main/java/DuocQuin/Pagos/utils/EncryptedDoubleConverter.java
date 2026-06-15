@@ -26,11 +26,13 @@ public class EncryptedDoubleConverter implements AttributeConverter<Double, Stri
         if (attribute == null) {
             return null;
         }
+
         return encryptor.encrypt(attribute.toString());
     }
 
     @Override
     public Double convertToEntityAttribute(String dbData) {
+
         if (dbData == null || dbData.isEmpty()) {
             return null;
         }

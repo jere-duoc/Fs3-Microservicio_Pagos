@@ -45,4 +45,4 @@ public class PagosModel {
 
     @Column(name = "id_usuario")
     private Long idUsuario;
-}
+}
