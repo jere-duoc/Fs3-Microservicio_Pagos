@@ -33,3 +33,5 @@ jobs:
                 push: true
                 tags: ${{steps.login-ecr.outputs.registry }}/fs3/pagos:latest
 
+
+                
